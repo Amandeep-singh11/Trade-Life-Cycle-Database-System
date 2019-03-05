@@ -1,0 +1,75 @@
+PROCEDURES AND TRIGGERS
+
+VIEWS
+
+CREATE VIEW highvaluereport AS
+select booking.bookingId, booking.counterpartyId,booking.dealNo,tradelevel.usdequivalent from booking
+join tradelevel on booking.bookingId = tradelevel.bookingId
+where usdequivalent > 1000000;
+
+--------------------------------------------------------------------------------
+create view failreport as
+select booking.BookingId,booking.CounterpartyId,booking.DealNo,status.Status from booking join
+status on booking.BookingId = status.BookingId
+where status.Status = 'Exclude Confirmed';
+
+
+
+PROCEDURE (USDEQUIVALENT)
+
+CREATE DEFINER=`root`@`localhost` PROCEDURE `proc_usdeq`(IN par_bookingId int)
+BEGIN
+DECLARE var_usdeq decimal ;
+DECLARE var_bookingamount decimal ;
+DECLARE var_cfator float;
+
+select booking.bookingAmount into var_bookingamount from booking where booking.BookingId = par_bookingId;
+select booking.Cfactor into var_cfator from booking where booking.BookingId = par_bookingId;
+
+set var_usdeq = var_bookingamount * var_cfator;
+
+update `dbfinal`.`tradelevel` SET `USDEquivalent` = (var_usdeq) WHERE tradelevel.BookingId = par_bookingId;
+
+END
+
+
+CALL `dbfinal`.`proc_usdeq`(new.BookingId);
+
+TRIGGER (CURRENCYCONVERTER)
+
+CREATE DEFINER=`root`@`localhost` PROCEDURE `proc_cc`(IN par_Currency varchar(45))
+BEGIN
+
+DECLARE var_factor float;
+
+select case
+when par_currency = 'USD' then var_factor=1
+when par_currency = 'EUR' then var_factor=1.28
+when par_currency = 'GBP' then var_factor=1.33
+else var_factor = 0.008
+
+end;
+
+INSERT INTO `dbfinal`.`Booking` (`Cfactor`) VALUES (var_factor);
+end
+
+----------------------------------------------------------------------------------------------------------------------------------------------
+
+DELIMITER $$
+create trigger tgCurrency
+after insert
+on dbfinal.currencyconverter
+for each row
+begin
+select case
+when currencyconverter.Currency = 'USD' then currencyconverter.Cfactor = 1
+when currencyconverter.Currency = 'EUR' then currencyconverter.Cfactor = 1.28
+when currencyconverter.Currency = 'JPY' then currencyconverter.Cfactor = 0.008
+else currencyconverter.Cfactor = 1.33
+end;
+
+end$$
+
+
+
+
